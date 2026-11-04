@@ -1,0 +1,20 @@
+[[source]]
+source_id = "fed-monetary-policy"
+url = "https://www.federalreserve.gov/feeds/press_monetary.xml"
+currency_tags = ["USD"]
+importance = 2
+allowed_hosts = ["www.federalreserve.gov"]
+
+[[source]]
+source_id = "ecb-press"
+url = "https://www.ecb.europa.eu/rss/press.html"
+currency_tags = ["EUR"]
+importance = 2
+allowed_hosts = ["www.ecb.europa.eu"]
+
+[[source]]
+source_id = "bls-cpi"
+url = "https://www.bls.gov/feed/cpi.rss"
+currency_tags = ["USD"]
+importance = 2
+allowed_hosts = ["www.bls.gov"]
