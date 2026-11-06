@@ -80,6 +80,9 @@ class DecisionService:
         self._seen_event_ids.add(event.event_id)
         self._calls_today += 1
         context = {
+            "current_time_utc": now.isoformat().replace("+00:00", "Z"),
+            "symbol": market_snapshot.get("symbol"),
+            "timeframe": market_snapshot.get("timeframe"),
             "event": {
                 "source_id": event.source_id,
                 "event_id": event.event_id,

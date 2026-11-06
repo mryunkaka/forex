@@ -75,6 +75,12 @@ class StateStore:
                     updated_at_utc TEXT NOT NULL,
                     detail_json TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS model_calls (
+                    event_id TEXT PRIMARY KEY,
+                    call_day TEXT NOT NULL,
+                    claimed_at_utc TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_model_calls_day ON model_calls(call_day);
                 """
             )
 
@@ -111,6 +117,38 @@ class StateStore:
         if row is None:
             return None
         return row["event_id"], row["published_at_utc"]
+
+    def claim_model_call(self, event_id: str, call_day: str, *, daily_limit: int) -> bool:
+        """Persistently reserve one provider attempt, before making the request."""
+        if not event_id or len(event_id) > 200:
+            raise ValueError("event_id is required and must be at most 200 characters")
+        try:
+            from datetime import date
+            date.fromisoformat(call_day)
+        except (TypeError, ValueError):
+            raise ValueError("call_day must be an ISO date") from None
+        if isinstance(daily_limit, bool) or not isinstance(daily_limit, int) or daily_limit < 0:
+            raise ValueError("daily_limit must be a non-negative integer")
+        if daily_limit == 0:
+            return False
+        from datetime import datetime, timezone
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if connection.execute("SELECT 1 FROM model_calls WHERE event_id = ?", (event_id,)).fetchone():
+                return False
+            used = connection.execute("SELECT COUNT(*) FROM model_calls WHERE call_day = ?", (call_day,)).fetchone()[0]
+            if used >= daily_limit:
+                return False
+            connection.execute(
+                "INSERT INTO model_calls(event_id, call_day, claimed_at_utc) VALUES (?, ?, ?)",
+                (event_id, call_day, datetime.now(timezone.utc).isoformat()),
+            )
+            return True
+
+    def count_model_calls(self, call_day: str) -> int:
+        with self._connect() as connection:
+            row = connection.execute("SELECT COUNT(*) FROM model_calls WHERE call_day = ?", (call_day,)).fetchone()
+        return int(row[0])
 
     def record_decision(self, record: Mapping[str, Any]) -> None:
         _assert_no_secret_keys(record)

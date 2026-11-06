@@ -12,8 +12,8 @@
 
 ## Global Constraints
 
-- 9Router/model use is optional until endpoint/model availability and a hard USD 5/month cap are verified.
-- During shadow mode: maximum 5 model calls/day; if cost caps cannot be enforced, disable API calls.
+- The user explicitly accepts uncapped 9Router/model charges; do not claim a hard dollar cap exists. Report recorded usage when available.
+- During shadow mode: maximum 5 model calls/day and one call per eligible event/symbol/candle. This is an operational request-rate guard, not a spend cap.
 - Proposed demo limits: 0.10% equity initial risk per position, 0.50% daily equity loss, and 2.0% phase drawdown; do not treat these as live-account recommendations.
 - Maximum one open position for the initial symbol; no martingale, grid, averaging down, or increasing risk after a loss.
 - A stale or invalid signal, failed API, failed feed, stale equity, disconnection, or non-demo account means no new order.
@@ -25,7 +25,7 @@
 - Duplicate/stale signal after restart: use persisted event identifiers and expiry; cover with replay checks.
 - Malformed or adversarial headline/model output: schema validation and source allowlist; cover with parser checks.
 - Lot minimum exceeds permitted loss: reject trade; verify with broker symbol specification.
-- Model timeout/over-budget/unknown model ID: return WAIT and disable further calls until cooldown/reset.
+- Model timeout/unknown model ID: return WAIT and disable further calls until cooldown/reset. Do not interpret missing dollar caps as an outage condition.
 - EA accidentally accepts a live account or stale equity: fail closed; validate account mode and freshness before considering any order.
 
 ---
@@ -111,12 +111,12 @@
 **Interfaces:** `ModelClient.propose(context) -> Decision`; `DecisionService.process(event, market_snapshot) -> ProcessingResult`. Secrets are loaded from process environment or protected secret storage, never `.env.example` or source control.
 
 - [x] Load and validate demo/shadow, broker, server, symbol, and timeframe from local `.env`; reject real mode, order execution, and enabled model provider. The API key is ignored by the loader and never retained in config objects.
-- [ ] Verify model ID and non-trading API compatibility only after the exposed key has been revoked and replaced outside chat.
-- [ ] Require enforceable usage limit ≤ USD 5/month and ≤5 calls/day; otherwise set provider disabled.
-- [ ] Apply one request per eligible event/symbol/candle, strict timeout, no unbounded retries, and cooldown after errors. Current prototype deduplicates and counts only in process memory; persistence, HTTP timeout, and cooldown await the disabled provider client.
+- [x] Verify model ID and non-trading API compatibility after the exposed key was replaced: 2026-11-06, one minimal completion returned HTTP 200 via the active `ForexDemo` key; no order was involved.
+- [x] Record user acceptance of uncapped provider charges. No enforceable monthly dollar cap exists; retain the five-call daily operational limit.
+- [ ] Apply one request per eligible event/symbol/candle, strict timeout, no unbounded retries, and cooldown after errors. HTTP client now has a bounded timeout and no retries; daily count/dedupe are still process-local and need persistent state before unattended service.
 - [x] Validate JSON against the strict schema and map exceptions/stale responses to WAIT. Confidence threshold policy remains to be set from shadow evidence.
 - [x] Keep shadow mode as the only implemented mode; proposal result has no bridge or order command interface.
-- [ ] Verify disabled provider, timeout, malformed response, excessive-call attempts, and quota denial all result in WAIT with no bridge command. Disabled, provider exception, malformed result and daily cap are unit-covered; API quota is unavailable.
+- [ ] Verify disabled provider, timeout, malformed response, excessive-call attempts, and cooldown all result in WAIT with no bridge command. Disabled, provider exception, malformed result and daily call cap are unit-covered; a dollar quota is not available or required by the user's updated instruction.
 
 ---
 

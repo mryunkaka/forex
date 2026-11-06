@@ -1,0 +1,282 @@
+diff --git a/third_party/EA31337/src/include/classes/Buffer.mqh b/third_party/EA31337/src/include/classes/Buffer.mqh
+index 896e5ca..0a43307 100644
+--- a/third_party/EA31337/src/include/classes/Buffer.mqh
++++ b/third_party/EA31337/src/include/classes/Buffer.mqh
+@@ -49,7 +49,7 @@ class Buffer : public Dict<long, T> {
+   T GetMin() {
+     T min = NULL;
+ 
+-    for (DictIterator<long, T> iter = Begin(); iter.IsValid(); ++iter)
++    for (DictIteratorBase<long, T> iter(Begin()); iter.IsValid(); ++iter)
+       if (min == NULL || min > iter.Value()) min = iter.Value();
+ 
+     return min;
+@@ -61,7 +61,7 @@ class Buffer : public Dict<long, T> {
+   T GetMax() {
+     T max = NULL;
+ 
+-    for (DictIterator<long, T> iter = Begin(); iter.IsValid(); ++iter)
++    for (DictIteratorBase<long, T> iter(Begin()); iter.IsValid(); ++iter)
+       if (max == NULL || max < iter.Value()) max = iter.Value();
+ 
+     return max;
+@@ -74,7 +74,7 @@ class Buffer : public Dict<long, T> {
+     T sum = 0;
+     unsigned int numValues = 0;
+ 
+-    for (DictIterator<long, T> iter = Begin(); iter.IsValid(); ++iter) {
++    for (DictIteratorBase<long, T> iter(Begin()); iter.IsValid(); ++iter) {
+       sum += iter.Value();
+       ++numValues;
+     }
+@@ -90,7 +90,7 @@ class Buffer : public Dict<long, T> {
+ 
+     ArrayResize(array, Size());
+ 
+-    for (DictIterator<long, T> iter = Begin(); iter.IsValid(); ++iter) {
++    for (DictIteratorBase<long, T> iter(Begin()); iter.IsValid(); ++iter) {
+       array[iter.Index()] = iter.Value();
+     }
+ 
+diff --git a/third_party/EA31337/src/include/classes/Data.struct.h b/third_party/EA31337/src/include/classes/Data.struct.h
+index 37e1505..99f6783 100644
+--- a/third_party/EA31337/src/include/classes/Data.struct.h
++++ b/third_party/EA31337/src/include/classes/Data.struct.h
+@@ -119,6 +119,13 @@ struct MqlParam {
+ struct DataParamEntry : public MqlParam {
+  public:
+   DataParamEntry() { type = (ENUM_DATATYPE)WRONG_VALUE; }
++  DataParamEntry(const bool _value) { type = TYPE_BOOL; integer_value = _value; }
++  DataParamEntry(const datetime _value) { type = TYPE_DATETIME; integer_value = _value; }
++  DataParamEntry(const double _value) { type = TYPE_DOUBLE; double_value = _value; }
++  DataParamEntry(const int _value) { type = TYPE_INT; integer_value = _value; }
++  DataParamEntry(const long _value) { type = TYPE_INT; integer_value = _value; }
++  DataParamEntry(const string _value) { type = TYPE_STRING; string_value = _value; }
++  DataParamEntry(const unsigned int _value) { type = TYPE_UINT; integer_value = _value; }
+   DataParamEntry(ENUM_DATATYPE _type, long _integer_value, double _double_value, string _string_value) {
+     type = _type;
+     integer_value = _integer_value;
+diff --git a/third_party/EA31337/src/include/classes/DateTime.mqh b/third_party/EA31337/src/include/classes/DateTime.mqh
+index 49502d5..5f69840 100644
+--- a/third_party/EA31337/src/include/classes/DateTime.mqh
++++ b/third_party/EA31337/src/include/classes/DateTime.mqh
+@@ -62,7 +62,7 @@ class DateTime {
+    */
+   DateTime() { TimeToStruct(TimeCurrent(), dt_curr); }
+   DateTime(DateTimeEntry &_dt) { dt_curr = _dt; }
+-  DateTime(MqlDateTime &_dt) { dt_curr = _dt; }
++  DateTime(MqlDateTime &_dt) { dt_curr.Set(_dt); }
+   DateTime(datetime _dt) { dt_curr.Set(_dt); }
+ 
+   /**
+diff --git a/third_party/EA31337/src/include/classes/DateTime.struct.h b/third_party/EA31337/src/include/classes/DateTime.struct.h
+index e961670..409652b 100644
+--- a/third_party/EA31337/src/include/classes/DateTime.struct.h
++++ b/third_party/EA31337/src/include/classes/DateTime.struct.h
+@@ -301,7 +301,14 @@ struct DateTimeEntry : MqlDateTime {
+   }
+   // Set date and time.
+   void Set(MqlDateTime& _time) {
+-    THIS_REF = _time;
++    year = _time.year;
++    mon = _time.mon;
++    day = _time.day;
++    hour = _time.hour;
++    min = _time.min;
++    sec = _time.sec;
++    day_of_week = _time.day_of_week;
++    day_of_year = _time.day_of_year;
+     // @fixit Should also set day of week.
+   }
+   void SetDayOfMonth(int _value) {
+diff --git a/third_party/EA31337/src/include/classes/Dict.mqh b/third_party/EA31337/src/include/classes/Dict.mqh
+index 26bd970..90c3926 100644
+--- a/third_party/EA31337/src/include/classes/Dict.mqh
++++ b/third_party/EA31337/src/include/classes/Dict.mqh
+@@ -119,7 +119,7 @@ class Dict : public DictBase<K, V> {
+   V operator[](K key) {
+     if (_mode == DictModeList) return GetSlot((unsigned int)key).value;
+ 
+-    int position;
++    unsigned int position;
+     DictSlot<K, V>* slot = GetSlotByKey(_DictSlots_ref, key, position);
+ 
+     if (!slot) return (V)NULL;
+@@ -191,7 +191,7 @@ class Dict : public DictBase<K, V> {
+    * Checks whether dictionary contains given value.
+    */
+   bool Contains(const V value) {
+-    for (DictIterator<K, V> i = Begin(); i.IsValid(); ++i) {
++    for (DictIteratorBase<K, V> i(Begin()); i.IsValid(); ++i) {
+       if (i.Value() == value) {
+         return true;
+       }
+@@ -420,7 +420,7 @@ class Dict : public DictBase<K, V> {
+   Matrix<X>* ToMatrix() {
+     Matrix<X>* result = new Matrix<X>(Size());
+ 
+-    for (DictIterator<K, V> i = Begin(); i.IsValid(); ++i) result[i.Index()] = (X)i.Value();
++    for (DictIteratorBase<K, V> i(Begin()); i.IsValid(); ++i) result[i.Index()] = (X)i.Value();
+ 
+     return result;
+   }
+diff --git a/third_party/EA31337/src/include/classes/DictObject.mqh b/third_party/EA31337/src/include/classes/DictObject.mqh
+index 59ba041..b495f86 100644
+--- a/third_party/EA31337/src/include/classes/DictObject.mqh
++++ b/third_party/EA31337/src/include/classes/DictObject.mqh
+@@ -64,6 +64,17 @@ class DictObject : public DictBase<K, V> {
+     }
+   }
+ 
++  DictObjectIterator<K, V> Begin() {
++    for (unsigned int i = 0; i < (unsigned int)ArraySize(_DictSlots_ref.DictSlots); ++i) {
++      if (_DictSlots_ref.DictSlots[i].IsValid() && _DictSlots_ref.DictSlots[i].IsUsed()) {
++        DictObjectIterator<K, V> iter(*this, i);
++        return iter;
++      }
++    }
++    DictObjectIterator<K, V> invalid;
++    return invalid;
++  }
++
+   /**
+    * Copy constructor.
+    */
+diff --git a/third_party/EA31337/src/include/classes/DictStruct.mqh b/third_party/EA31337/src/include/classes/DictStruct.mqh
+index b4cb0d7..28c11ca 100644
+--- a/third_party/EA31337/src/include/classes/DictStruct.mqh
++++ b/third_party/EA31337/src/include/classes/DictStruct.mqh
+@@ -136,7 +136,7 @@ class DictStruct : public DictBase<K, V> {
+   V operator[](K key) {
+     DictSlot<K, V>* slot;
+ 
+-    int position;
++    unsigned int position;
+ 
+     if (_mode == DictModeList)
+       slot = GetSlot((unsigned int)key);
+diff --git a/third_party/EA31337/src/include/classes/Indicator.mqh b/third_party/EA31337/src/include/classes/Indicator.mqh
+index b5b0f3c..d418484 100644
+--- a/third_party/EA31337/src/include/classes/Indicator.mqh
++++ b/third_party/EA31337/src/include/classes/Indicator.mqh
+@@ -680,7 +680,7 @@ class Indicator : public IndicatorBase {
+   /**
+    * Sets indicator's params.
+    */
+-  void SetParams(IndicatorParams& _iparams) { iparams = _iparams; }
++  void SetParams(TS& _iparams) { iparams = _iparams; }
+ 
+   /**
+    * Sets indicator's symbol.
+diff --git a/third_party/EA31337/src/include/classes/Indicator.struct.h b/third_party/EA31337/src/include/classes/Indicator.struct.h
+index 99bc74b..73ea5c3 100644
+--- a/third_party/EA31337/src/include/classes/Indicator.struct.h
++++ b/third_party/EA31337/src/include/classes/Indicator.struct.h
+@@ -58,6 +58,9 @@ struct IndicatorDataEntryValue {
+   unsigned char flags;
+   IndicatorDataEntryTypelessValue value;
+ 
++  IndicatorDataEntryValue() : flags(0) {}
++  IndicatorDataEntryValue(const double _value) : flags(0) { Set(_value); }
++
+   // Returns type of the value.
+   ENUM_DATATYPE GetDataType() { return (ENUM_DATATYPE)((flags & 0xF0) >> 4); }
+ 
+diff --git a/third_party/EA31337/src/include/classes/Order.struct.h b/third_party/EA31337/src/include/classes/Order.struct.h
+index d2bda53..3e4aa7d 100644
+--- a/third_party/EA31337/src/include/classes/Order.struct.h
++++ b/third_party/EA31337/src/include/classes/Order.struct.h
+@@ -928,7 +928,12 @@ struct OrderStatic {
+  * Usage: SerializerConverter::FromObject(MqlTradeRequestProxy(_request)).ToString<SerializerJson>());
+  */
+ struct MqlTradeRequestProxy : MqlTradeRequest {
+-  MqlTradeRequestProxy(MqlTradeRequest &r) { THIS_REF = r; }
++  MqlTradeRequestProxy(MqlTradeRequest &r) {
++    action = r.action; magic = r.magic; order = r.order; symbol = r.symbol; volume = r.volume;
++    price = r.price; stoplimit = r.stoplimit; sl = r.sl; tp = r.tp; deviation = r.deviation;
++    type = r.type; type_filling = r.type_filling; type_time = r.type_time; expiration = r.expiration;
++    comment = r.comment; position = r.position; position_by = r.position_by;
++  }
+ 
+   SerializerNodeType Serialize(Serializer &s) {
+     s.PassEnum(THIS_REF, "action", action);
+@@ -958,7 +963,11 @@ struct MqlTradeRequestProxy : MqlTradeRequest {
+  * Usage: SerializerConverter::FromObject(MqlTradeResultProxy(_request)).ToString<SerializerJson>());
+  */
+ struct MqlTradeResultProxy : MqlTradeResult {
+-  MqlTradeResultProxy(MqlTradeResult &r) { THIS_REF = r; }
++  MqlTradeResultProxy(MqlTradeResult &r) {
++    retcode = r.retcode; deal = r.deal; order = r.order; volume = r.volume; price = r.price;
++    bid = r.bid; ask = r.ask; comment = r.comment; request_id = r.request_id;
++    retcode_external = r.retcode_external;
++  }
+ 
+   SerializerNodeType Serialize(Serializer &s) {
+     s.Pass(THIS_REF, "retcode", retcode);
+diff --git a/third_party/EA31337/src/include/classes/Pattern.struct.h b/third_party/EA31337/src/include/classes/Pattern.struct.h
+index 2297c7c..62c50a5 100644
+--- a/third_party/EA31337/src/include/classes/Pattern.struct.h
++++ b/third_party/EA31337/src/include/classes/Pattern.struct.h
+@@ -179,6 +179,7 @@ struct PatternCandle1 : PatternCandle {
+       SetPattern(_enum, CheckPattern(_enum, _c));
+     }
+   }
++  bool CheckPattern(int _flags) const { return PatternCandle::CheckPattern(_flags); }
+   // Calculation methods.
+   static bool CheckPattern(ENUM_PATTERN_1CANDLE _enum, const BarOHLC& _c) {
+     switch (_enum) {
+@@ -302,6 +303,7 @@ struct PatternCandle2 : PatternCandle {
+       SetPattern(_enum, CheckPattern(_enum, _c));
+     }
+   }
++  bool CheckPattern(int _flags) const { return PatternCandle::CheckPattern(_flags); }
+   // Calculation methods.
+   static bool CheckPattern(ENUM_PATTERN_2CANDLE _enum, const BarOHLC& _c[]) {
+     switch (_enum) {
+@@ -411,6 +413,7 @@ struct PatternCandle3 : PatternCandle {
+       SetPattern(_enum, CheckPattern(_enum, _c));
+     }
+   }
++  bool CheckPattern(int _flags) const { return PatternCandle::CheckPattern(_flags); }
+   // Calculation methods.
+   static bool CheckPattern(ENUM_PATTERN_3CANDLE _enum, const BarOHLC& _c[]) {
+     switch (_enum) {
+diff --git a/third_party/EA31337/src/include/classes/Storage/Objects.h b/third_party/EA31337/src/include/classes/Storage/Objects.h
+index 9a31260..8b5ba9b 100644
+--- a/third_party/EA31337/src/include/classes/Storage/Objects.h
++++ b/third_party/EA31337/src/include/classes/Storage/Objects.h
+@@ -49,7 +49,7 @@ class Objects {
+    * Tries to retrieve pointer to object for a given key. Returns true if object did exist.
+    */
+   static bool TryGet(string& key, C*& out_ptr) {
+-    int position;
++    unsigned int position;
+     if (!GetObjects().KeyExists(key, position)) {
+       out_ptr = NULL;
+       return false;
+diff --git a/third_party/EA31337/src/include/classes/Storage/ObjectsCache.h b/third_party/EA31337/src/include/classes/Storage/ObjectsCache.h
+index 0ca816f..b9af91d 100644
+--- a/third_party/EA31337/src/include/classes/Storage/ObjectsCache.h
++++ b/third_party/EA31337/src/include/classes/Storage/ObjectsCache.h
+@@ -64,7 +64,7 @@ class ObjectsCache {
+    * Tries to retrieve pointer to object for a given key. Returns true if object did exist.
+    */
+   static bool TryGet(string& key, C*& out_ptr) {
+-    int position;
++    unsigned int position;
+     if (!GetObjects().KeyExists(key, position)) {
+       out_ptr = NULL;
+       return false;
+diff --git a/third_party/EA31337/src/strategies/Retracement/Stg_Retracement.mqh b/third_party/EA31337/src/strategies/Retracement/Stg_Retracement.mqh
+index 3c9cc41..a1e99de 100644
+--- a/third_party/EA31337/src/strategies/Retracement/Stg_Retracement.mqh
++++ b/third_party/EA31337/src/strategies/Retracement/Stg_Retracement.mqh
+@@ -115,6 +115,8 @@ struct Stg_Retracement_Params_Defaults : StgParams {
+ };
+ 
+ struct Retracement_BarOHLC : public BarOHLC {
++  Retracement_BarOHLC() {}
++  Retracement_BarOHLC(const BarOHLC& _bar) : BarOHLC(_bar.open, _bar.high, _bar.low, _bar.close, _bar.time) {}
+   bool GetLevels(ENUM_PP_TYPE _type, ENUM_APPLIED_PRICE _ap, double &_pp, double &_r1, double &_r2, double &_r3,
+                  double &_r4, double &_s1, double &_s2, double &_s3, double &_s4) {
+     double _range = GetRange();

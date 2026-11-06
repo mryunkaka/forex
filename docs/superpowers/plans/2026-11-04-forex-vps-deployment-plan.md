@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Do not reuse SSH password or 9Router API key previously pasted in chat; revoke/rotate before connecting.
+- Do not use the SSH password or 9Router API key previously pasted in chat. Key-only SSH has been configured for `saidadam28`; the underlying account password is not reset. Rotate the 9Router key before any later use.
 - Prefer a fresh SSH key installed by the user; do not ask the user to paste replacement secrets into chat.
 - Initial remote inspection is read-only and reports OS, CPU, RAM, disk, architecture, display/session, and network status.
 - Install only after VPS meets the verified terminal and service requirements.
@@ -37,10 +37,10 @@
 
 **Interfaces:** Inventory contains only non-secret facts and redacted command output.
 
-- [ ] Revoke/rotate the previously exposed SSH password and API key; install a fresh SSH public key using the user's secure method.
-- [ ] Connect with host-key verification; do not disable SSH host-key checks.
-- [ ] Run read-only commands for OS/version, architecture, vCPU, RAM, free disk, display session, network, current services, and package manager state.
-- [ ] Record compatibility findings and stop if the environment cannot keep MT5 and the worker alive after disconnect/reboot.
+- [x] Connect with key-only SSH and host-key verification. The server now requires `publickey` for `saidadam28`; config backup is recorded in the inventory. A fresh key-only session and sudo access succeeded.
+- [x] Confirm the 9Router key was not used or installed; rotation is still required before future use.
+- [x] Run read-only commands for OS/version, architecture, vCPU, RAM, free disk, display session, network, current services, and package manager state.
+- [x] Record compatibility findings in `docs/operations/vps-inventory.md`. Xvfb-based MT5 GUI is running in a temporary, non-boot-enabled service; persistence/reboot recovery is not yet verified.
 
 ---
 
@@ -53,9 +53,9 @@
 
 **Interfaces:** systemd runs as a dedicated unprivileged account; environment file mode is 0600 and excluded from logs/backups not protected by policy.
 
-- [ ] Create dedicated service user and app directory without modifying unrelated accounts or services.
+- [ ] Create dedicated service user and app directory without modifying unrelated accounts or services. Project currently lives under the existing VPS user; dedicated service user is not created.
 - [ ] Install only pinned Python dependencies into a virtual environment.
-- [ ] Configure service restart limits, working directory, restrictive filesystem/network permissions, and bounded logs.
+- [ ] Configure service restart limits, working directory, restrictive filesystem/network permissions, and bounded logs. Temporary MT5 UI service exists but is disabled at boot; Python service is not configured.
 - [ ] Verify service starts in provider-disabled shadow mode without any credentials.
 
 ---
@@ -68,8 +68,9 @@
 
 **Interfaces:** MT5 connects only to the user's Finex demo server; MT5 common-files path matches the Python bridge configuration.
 
-- [ ] Install Wine/MT5 only if the read-only inventory meets requirements.
-- [ ] Sign in manually to the Finex demo account; verify account type/server and phone login separately.
+- [x] Install Wine/MT5 after inventory showed sufficient resources. The initial Ubuntu Wine 9 prefix triggered MT5's debugger alert. WineHQ staging 11.21 was installed after package simulation and backup; a separate prefix starts the terminal. The account login from the old prefix did not carry over. WebView2 installer previously timed out and still needs validation.
+- [ ] Verify the current Wine 11.21 session is the Finex demo account (`FinexBisnisSolusi-Demo`) and confirm the phone shows the same demo account. The user's screenshot shows a signed-in terminal, but not the exact server/account mode.
+- [ ] Compile and integrate the audited EA. Attempted compilation of the pinned upstream EA produced 100 errors and 60 warnings; no `.ex5` is available, and the EA was not attached.
 - [ ] Install the pinned/audited EA and shadow adapter; leave order execution disabled.
 - [ ] Confirm terminal and adapter recover after session disconnect and reboot.
 - [ ] Verify desktop and MT5 mobile show the same demo account and mobile receives push alerts.
@@ -82,7 +83,7 @@
 - Modify on VPS: protected environment file only.
 - Verify: service logs and 9Router usage page.
 
-**Interfaces:** The service may call the verified model only when operator-controlled spend cap ≤ USD 5/month and ≤5 calls/day are active; otherwise provider stays disabled.
+**Interfaces:** The user accepts uncapped provider charges. The service may call the verified model only in demo/shadow mode, with at most 5 calls/day and deduplication/cooldown; usage must not be described as spend-capped. Keep the provider disabled until the runtime service and event source are installed and validated.
 
 - [ ] Enter the newly issued API key locally on VPS without transmitting it in chat or writing it to repository files.
 - [ ] Confirm model ID, endpoint response shape, usage tracking, and enforceable cap using a non-trading health request.

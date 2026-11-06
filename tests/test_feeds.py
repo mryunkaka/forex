@@ -30,6 +30,19 @@ def test_parses_rss_release_and_normalizes_timestamp_to_utc():
     assert "Rate statement" in items[0].summary
 
 
+def test_title_only_is_supported_only_when_source_explicitly_allows_it():
+    payload = b"""<rss><channel><item><guid>one</guid><title>ECB update</title>
+    <link>https://example.eu/update</link><pubDate>Wed, 04 Nov 2026 10:00:00 +0000</pubDate>
+    </item></channel></rss>"""
+    source = SourceConfig("ecb", "https://example.eu/feed.xml", ("EUR",), 2, allow_title_only=True)
+    item = OfficialReleaseFeed.parse(payload, source)[0]
+    assert item.summary == "Source feed does not provide a summary."
+
+    import pytest
+    with pytest.raises(ValueError, match="missing title, summary"):
+        OfficialReleaseFeed.parse(payload, SourceConfig("ecb", "https://example.eu/feed.xml", ("EUR",), 2))
+
+
 def test_eligibility_rejects_stale_disallowed_and_wrong_currency_items():
     payload = b"""<rss><channel><item><guid>id1</guid><title>News</title>
     <link>https://example.gov/news</link><pubDate>Wed, 04 Nov 2026 08:00:00 +0000</pubDate>

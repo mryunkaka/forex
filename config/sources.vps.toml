@@ -1,0 +1,9 @@
+# VPS-reachable official source subset. Fed and BLS currently return HTTP 403
+# from this host and are intentionally omitted until their endpoints work.
+[[source]]
+source_id = "ecb-press"
+url = "https://www.ecb.europa.eu/rss/press.html"
+currency_tags = ["EUR"]
+importance = 2
+allowed_hosts = ["www.ecb.europa.eu"]
+allow_title_only = true

@@ -23,8 +23,9 @@ def load_sources(path: str | Path) -> tuple[SourceConfig, ...]:
     for row in rows:
         if not isinstance(row, dict):
             raise ValueError("each source entry must be a table")
-        allowed_fields = {"source_id", "url", "currency_tags", "importance", "allowed_hosts"}
-        if set(row) - allowed_fields or allowed_fields - set(row):
+        allowed_fields = {"source_id", "url", "currency_tags", "importance", "allowed_hosts", "allow_title_only"}
+        required_fields = allowed_fields - {"allow_title_only"}
+        if set(row) - allowed_fields or required_fields - set(row):
             raise ValueError("source entry has missing or unexpected fields")
         source = SourceConfig(
             source_id=row["source_id"],
@@ -32,6 +33,7 @@ def load_sources(path: str | Path) -> tuple[SourceConfig, ...]:
             currency_tags=tuple(row["currency_tags"]),
             importance=row["importance"],
             allowed_hosts=tuple(row["allowed_hosts"]),
+            allow_title_only=row.get("allow_title_only", False),
         )
         if source.source_id in seen:
             raise ValueError(f"duplicate source_id: {source.source_id}")

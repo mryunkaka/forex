@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +26,7 @@ _REQUIRED = {
     "MODEL_PROVIDER_ENABLED",
     "MODEL_BASE_URL",
     "MODEL_ID",
+    "MODEL_TIMEOUT_SECONDS",
     "MODEL_DAILY_CALL_LIMIT",
 }
 _SYMBOL_RE = re.compile(r"^[A-Z0-9][A-Z0-9._-]{0,31}$")
@@ -44,6 +46,7 @@ class RuntimeConfig:
     model_provider_enabled: bool
     model_base_url: str
     model_id: str
+    model_timeout_seconds: int
     model_daily_call_limit: int
 
 
@@ -59,7 +62,8 @@ def load_runtime_config(values: Mapping[str, str]) -> RuntimeConfig:
     if missing:
         raise RuntimeConfigError("missing settings: " + ", ".join(sorted(missing)))
 
-    # Fail closed even if someone edits .env: these gates cannot be enabled by config.
+    # Fail closed even if someone edits .env: live mode and order execution
+    # cannot be enabled by runtime configuration.
     if values["APP_ENV"].strip().lower() != "demo":
         raise RuntimeConfigError("APP_ENV must be demo")
     if values["TRADING_MODE"].strip().lower() != "shadow":
@@ -68,8 +72,8 @@ def load_runtime_config(values: Mapping[str, str]) -> RuntimeConfig:
     if execution_enabled:
         raise RuntimeConfigError("TRADING_EXECUTION_ENABLED must remain false")
     provider_enabled = _boolean(values, "MODEL_PROVIDER_ENABLED")
-    if provider_enabled:
-        raise RuntimeConfigError("MODEL_PROVIDER_ENABLED must remain false until provider limits are verified")
+    if provider_enabled and not values.get("MODEL_API_KEY", "").strip():
+        raise RuntimeConfigError("MODEL_API_KEY is required when MODEL_PROVIDER_ENABLED is true")
 
     broker = values["BROKER_NAME"].strip().upper()
     account_mode = values["MT5_EXPECTED_ACCOUNT_MODE"].strip().lower()
@@ -89,11 +93,25 @@ def load_runtime_config(values: Mapping[str, str]) -> RuntimeConfig:
 
     base_url = values["MODEL_BASE_URL"].strip()
     parsed_url = urlparse(base_url)
-    if parsed_url.scheme != "https" or not parsed_url.hostname:
-        raise RuntimeConfigError("MODEL_BASE_URL must be an HTTPS URL")
+    hostname = parsed_url.hostname
+    if not hostname or parsed_url.username is not None or parsed_url.password is not None:
+        raise RuntimeConfigError("MODEL_BASE_URL must be an HTTPS URL or loopback HTTP URL")
+    is_loopback = hostname.lower() == "localhost"
+    try:
+        is_loopback = is_loopback or ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        pass
+    if parsed_url.scheme != "https" and not (parsed_url.scheme == "http" and is_loopback):
+        raise RuntimeConfigError("MODEL_BASE_URL must be an HTTPS URL or loopback HTTP URL")
     model_id = values["MODEL_ID"].strip()
     if model_id != "cx/gpt-6-luna":
         raise RuntimeConfigError("MODEL_ID does not match the configured project model")
+    try:
+        timeout_seconds = int(values["MODEL_TIMEOUT_SECONDS"])
+    except (TypeError, ValueError) as exc:
+        raise RuntimeConfigError("MODEL_TIMEOUT_SECONDS must be an integer from 1 through 60") from exc
+    if not 1 <= timeout_seconds <= 60:
+        raise RuntimeConfigError("MODEL_TIMEOUT_SECONDS must be an integer from 1 through 60")
     try:
         daily_limit = int(values["MODEL_DAILY_CALL_LIMIT"])
     except (TypeError, ValueError) as exc:
@@ -110,9 +128,10 @@ def load_runtime_config(values: Mapping[str, str]) -> RuntimeConfig:
         mt5_expected_server=server,
         mt5_symbol=symbol,
         mt5_timeframe="M5",
-        model_provider_enabled=False,
+        model_provider_enabled=provider_enabled,
         model_base_url=base_url,
         model_id=model_id,
+        model_timeout_seconds=timeout_seconds,
         model_daily_call_limit=daily_limit,
     )
 
@@ -120,7 +139,8 @@ def load_runtime_config(values: Mapping[str, str]) -> RuntimeConfig:
 def load_runtime_config_file(path: str | Path) -> RuntimeConfig:
     """Read supported .env keys while ignoring secret and unrelated values."""
     values: dict[str, str] = {}
-    supported = _REQUIRED
+    # Read the credential only to check presence; never include it in RuntimeConfig.
+    supported = _REQUIRED | {"MODEL_API_KEY"}
     for line_number, raw_line in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), 1):
         line = raw_line.strip()
         if not line or line.startswith("#"):
@@ -138,3 +158,27 @@ def load_runtime_config_file(path: str | Path) -> RuntimeConfig:
             value = value[1:-1]
         values[key] = value
     return load_runtime_config(values)
+
+
+def read_model_api_key(path: str | Path) -> str:
+    """Read the request credential separately so config/log records never retain it."""
+    try:
+        lines = Path(path).read_text(encoding="utf-8").splitlines()
+    except OSError:
+        raise RuntimeConfigError("cannot read runtime environment file") from None
+    found: str | None = None
+    for line_number, raw_line in enumerate(lines, 1):
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = (part.strip() for part in line.split("=", 1))
+        if key != "MODEL_API_KEY":
+            continue
+        if found is not None:
+            raise RuntimeConfigError("duplicate MODEL_API_KEY setting")
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        if not value or "\n" in value or "\r" in value:
+            raise RuntimeConfigError(f"invalid MODEL_API_KEY on line {line_number}")
+        found = value
+    return found or ""

@@ -89,6 +89,19 @@ def test_source_cursor_advances_and_duplicate_decisions_are_not_overwritten(tmp_
     assert store.get_decision("decision:unique")["reason"] == "eligible"
 
 
+def test_model_call_reservation_is_persistent_and_enforces_daily_limit(tmp_path):
+    database = tmp_path / "state.sqlite3"
+    store = StateStore(database)
+    assert store.claim_model_call("event:1", "2026-11-06", daily_limit=2) is True
+    assert store.claim_model_call("event:1", "2026-11-06", daily_limit=2) is False
+
+    reopened = StateStore(database)
+    assert reopened.claim_model_call("event:2", "2026-11-06", daily_limit=2) is True
+    assert reopened.claim_model_call("event:3", "2026-11-06", daily_limit=2) is False
+    assert reopened.claim_model_call("event:3", "2026-11-07", daily_limit=2) is True
+    assert reopened.count_model_calls("2026-11-06") == 2
+
+
 def test_decision_audit_model_produces_store_mapping():
     record = DecisionAuditRecord(
         record_id="decision:2",

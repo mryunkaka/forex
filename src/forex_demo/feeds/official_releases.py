@@ -32,6 +32,7 @@ class SourceConfig:
     currency_tags: tuple[str, ...]
     importance: int
     allowed_hosts: tuple[str, ...] = ()
+    allow_title_only: bool = False
 
     def __post_init__(self) -> None:
         parsed = urlparse(self.url)
@@ -107,6 +108,8 @@ class OfficialReleaseFeed:
         for entry in entries:
             title_raw = cls._child_text(entry, "title")
             summary_raw = cls._child_text(entry, "description") or cls._child_text(entry, "summary")
+            if not summary_raw and source.allow_title_only:
+                summary_raw = "Source feed does not provide a summary."
             published_raw = (
                 cls._child_text(entry, "pubdate")
                 or cls._child_text(entry, "published")
